@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Speech to Text — Pelocal Assignment</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:       #0f0f13;
+      --surface:  #18181f;
+      --surface2: #22222c;
+      --border:   #2e2e3a;
+      --accent:   #7c6ef7;
+      --accent2:  #5eead4;
+      --red:      #f87171;
+      --text:     #e8e8f0;
+      --muted:    #7b7b8d;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 48px 16px 80px;
+    }
+
+    header { text-align: center; margin-bottom: 40px; }
+
+    .badge-row {
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px; margin-bottom: 20px; flex-wrap: wrap;
+    }
+    .badge {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      padding: 4px 10px; border-radius: 99px; border: 1px solid;
+    }
+    .badge-purple { color: #a78bfa; border-color: #7c6ef740; background: #7c6ef710; }
+    .badge-teal   { color: #5eead4; border-color: #5eead440; background: #5eead410; }
+
+    h1 {
+      font-size: clamp(28px, 6vw, 42px); font-weight: 600;
+      letter-spacing: -0.03em; line-height: 1.1;
+      background: linear-gradient(135deg, #e8e8f0 30%, #a78bfa);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; margin-bottom: 12px;
+    }
+    .subtitle { color: var(--muted); font-size: 15px; }
+
+    .card {
+      width: 100%; max-width: 640px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; overflow: hidden;
+    }
+
+    .waveform-wrap {
+      height: 72px; background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      position: relative; overflow: hidden;
+    }
+    #waveCanvas { width: 100%; height: 100%; display: block; }
+
+    .waveform-idle {
+      position: absolute; inset: 0; display: flex;
+      align-items: center; justify-content: center;
+      gap: 3px; pointer-events: none;
+    }
+    .waveform-idle span {
+      width: 3px; height: 18px; border-radius: 99px;
+      background: var(--border);
+      animation: idlePulse 1.4s ease-in-out infinite;
+    }
+    .waveform-idle span:nth-child(2) { animation-delay: .15s; height: 10px; }
+    .waveform-idle span:nth-child(3) { animation-delay: .30s; height: 24px; }
+    .waveform-idle span:nth-child(4) { animation-delay: .45s; height: 14px; }
+    .waveform-idle span:nth-child(5) { animation-delay: .60s; height: 20px; }
+    .waveform-idle span:nth-child(6) { animation-delay: .75s; height: 10px; }
+    .waveform-idle span:nth-child(7) { animation-delay: .90s; height: 18px; }
+    @keyframes idlePulse {
+      0%, 100% { opacity: 0.3; transform: scaleY(1); }
+      50%       { opacity: 0.7; transform: scaleY(1.4); }
+    }
+
+    .controls {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 16px; padding: 28px 24px 20px;
+    }
+
+    .lang-row {
+      display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+    }
+    .lang-btn {
+      font-size: 12px; font-family: 'DM Sans', sans-serif;
+      padding: 6px 16px; border-radius: 99px;
+      border: 1px solid var(--border);
+      background: var(--surface2); color: var(--muted);
+      cursor: pointer; transition: all .2s;
+    }
+    .lang-btn:hover { color: var(--text); border-color: var(--muted); }
+    .lang-btn.active {
+      border-color: var(--accent); color: var(--accent);
+      background: #7c6ef715;
+    }
+
+    #micBtn {
+      width: 72px; height: 72px; border-radius: 50%; border: none;
+      cursor: pointer; background: var(--accent); color: #fff;
+      font-size: 28px; display: flex; align-items: center; justify-content: center;
+      transition: transform .2s, background .2s, box-shadow .2s;
+      box-shadow: 0 0 0 0 rgba(124,110,247,0); flex-shrink: 0;
+    }
+    #micBtn:hover { transform: scale(1.06); }
+    #micBtn.recording {
+      background: var(--red);
+      animation: ripple 1.4s ease-out infinite;
+    }
+    @keyframes ripple {
+      0%   { box-shadow: 0 0 0 0    rgba(248,113,113,.55); }
+      70%  { box-shadow: 0 0 0 18px rgba(248,113,113,0);   }
+      100% { box-shadow: 0 0 0 0    rgba(248,113,113,0);   }
+    }
+
+    .status-row {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: var(--muted);
+    }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--muted); flex-shrink: 0; transition: background .3s;
+    }
+    .dot.connected  { background: #4ade80; }
+    .dot.recording  { background: var(--red); animation: blink 1s step-end infinite; }
+    .dot.processing { background: #facc15; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    .buffer-track {
+      width: 100%; height: 3px; background: var(--border);
+      border-radius: 99px; overflow: hidden;
+    }
+    .buffer-fill {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 99px; transition: width .35s ease;
+    }
+
+    .output-wrap { border-top: 1px solid var(--border); padding: 24px; }
+    .output-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .output-label {
+      font-size: 11px; font-family: 'DM Mono', monospace;
+      text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+    }
+    .output-actions { display: flex; gap: 8px; align-items: center; }
+
+    #langIndicator {
+      font-size: 11px; font-family: 'DM Mono', monospace;
+      padding: 3px 10px; border-radius: 99px;
+      border: 1px solid var(--border); color: var(--accent2);
+      background: #5eead408;
+    }
+    #clearBtn {
+      font-size: 12px; color: var(--muted); background: none;
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 4px 12px; cursor: pointer; transition: color .2s, border-color .2s;
+    }
+    #clearBtn:hover { color: var(--text); border-color: var(--muted); }
+
+    #outputBox {
+      min-height: 140px; font-size: 17px; line-height: 1.75;
+      color: var(--text); word-break: break-word;
+    }
+    #outputBox.empty { color: var(--muted); font-style: italic; font-size: 15px; }
+
+    .word-new {
+      display: inline;
+      animation: fadeUp .35s ease forwards;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: translateY(0);   }
+    }
+
+    footer {
+      margin-top: 32px; text-align: center;
+      font-size: 12px; color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="badge-row">
+    <span class="badge badge-purple">OpenAI Whisper</span>
+    <span class="badge badge-teal">Hindi · Marathi · English</span>
+  </div>
+  <h1>Speech to Text</h1>
+  <p class="subtitle">Speak in Hindi, Marathi, English, or mix — transcribed in real time.</p>
+</header>
+
+<div class="card">
+
+  <div class="waveform-wrap">
+    <canvas id="waveCanvas"></canvas>
+    <div class="waveform-idle" id="idleAnim">
+      <span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span>
+    </div>
+  </div>
+
+  <div class="controls">
+
+    <div class="lang-row" id="langRow">
+      <button class="lang-btn active" data-lang="hi">🇮🇳 Hindi</button>
+      <button class="lang-btn"        data-lang="mr">🇮🇳 Marathi</button>
+      <button class="lang-btn"        data-lang="en">🇬🇧 English</button>
+      <button class="lang-btn"        data-lang="auto">🌐 Auto</button>
+    </div>
+
+    <button id="micBtn" title="Click to start / stop recording">🎤</button>
+
+    <div class="status-row">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">Connecting…</span>
+    </div>
+
+    <div class="buffer-track" style="width:100%;max-width:360px">
+      <div class="buffer-fill" id="bufFill"></div>
+    </div>
+
+  </div>
+
+  <div class="output-wrap">
+    <div class="output-header">
+      <span class="output-label">Transcript</span>
+      <div class="output-actions">
+        <span id="langIndicator">hi</span>
+        <button id="clearBtn">Clear</button>
+      </div>
+    </div>
+    <div id="outputBox" class="empty">Your transcribed text will appear here…</div>
+  </div>
+
+</div>
+
+<footer>
+  Pelocal AI Tech Hiring Assignment &nbsp;·&nbsp; Python / FastAPI / Whisper
+</footer>
+
+<script>
+// ── Elements ──────────────────────────────────────────────────────────────────
+const micBtn        = document.getElementById('micBtn');
+const statusDot     = document.getElementById('statusDot');
+const statusText    = document.getElementById('statusText');
+const outputBox     = document.getElementById('outputBox');
+const clearBtn      = document.getElementById('clearBtn');
+const bufFill       = document.getElementById('bufFill');
+const waveCanvas    = document.getElementById('waveCanvas');
+const idleAnim      = document.getElementById('idleAnim');
+const langIndicator = document.getElementById('langIndicator');
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let socket, mediaRecorder, analyser, animFrame, audioCtx;
+let isRecording   = false;
+let chunks        = [];
+let chunkCount    = 0;
+let selectedLang  = 'hi';
+let SERVER_WINDOW = 1;
+
+const CHUNK_MS = 4000;
+
+// ── Load server config ────────────────────────────────────────────────────────
+async function loadConfig() {
+  try {
+    const res = await fetch('/config');
+    const cfg = await res.json();
+    SERVER_WINDOW = cfg.window ?? 1;
+  } catch (_) {
+    SERVER_WINDOW = 1;
+  }
+}
+
+// ── Language selector ─────────────────────────────────────────────────────────
+document.querySelectorAll('.lang-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedLang = btn.dataset.lang;
+    langIndicator.textContent = selectedLang;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: 'set_lang', lang: selectedLang }));
+    }
+  });
+});
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connect() {
+  socket = new WebSocket(`ws://${location.host}/ws`);
+
+  socket.onopen = () => {
+    socket.send(JSON.stringify({ type: 'set_lang', lang: selectedLang }));
+    setStatus('connected', 'Ready — click mic to speak');
+  };
+
+  socket.onmessage = ({ data }) => {
+    if (data && data.trim()) {
+      appendText(data);
+      setStatus('connected', '🟢 Received transcript');
+      setTimeout(() => {
+        if (isRecording) setStatus('recording', '🔴 Listening…');
+      }, 1200);
+    } else {
+      if (isRecording) setStatus('recording', '🔴 Listening…');
+    }
+  };
+
+  socket.onclose = () => setStatus('idle', 'Disconnected — refresh page');
+  socket.onerror = () => setStatus('idle', 'Connection error');
+}
+
+// ── Status helper ─────────────────────────────────────────────────────────────
+function setStatus(type, msg) {
+  statusDot.className    = 'dot ' + type;
+  statusText.textContent = msg;
+}
+
+// ── Transcript ────────────────────────────────────────────────────────────────
+function appendText(text) {
+  if (outputBox.classList.contains('empty')) {
+    outputBox.classList.remove('empty');
+    outputBox.textContent = '';
+  }
+  const span = document.createElement('span');
+  span.className   = 'word-new';
+  span.textContent = text + ' ';
+  outputBox.appendChild(span);
+  outputBox.scrollTop = outputBox.scrollHeight;
+}
+
+clearBtn.addEventListener('click', () => {
+  outputBox.textContent = 'Your transcribed text will appear here…';
+  outputBox.classList.add('empty');
+});
+
+// ── Recording ─────────────────────────────────────────────────────────────────
+micBtn.addEventListener('click', async () => {
+  isRecording ? stopRecording() : await startRecording();
+});
+
+async function startRecording() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {
+    setStatus('idle', 'Microphone access denied');
+  });
+  if (!stream) return;
+
+  audioCtx     = new AudioContext();
+  const src    = audioCtx.createMediaStreamSource(stream);
+  analyser     = audioCtx.createAnalyser();
+  analyser.fftSize = 256;
+  src.connect(analyser);
+  idleAnim.style.display = 'none';
+  drawWave();
+
+  const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+    ? 'audio/webm;codecs=opus' : 'audio/webm';
+
+  mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+  chunks        = [];
+  chunkCount    = 0;
+
+  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+
+  mediaRecorder.onstop = async () => {
+    const blob   = new Blob(chunks, { type: mime });
+    const buffer = await blob.arrayBuffer();
+    chunks = [];
+
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(buffer);
+      chunkCount++;
+
+      const pct = ((chunkCount % SERVER_WINDOW || SERVER_WINDOW) / SERVER_WINDOW) * 100;
+      bufFill.style.width = pct + '%';
+
+      if (chunkCount % SERVER_WINDOW === 0) {
+        setStatus('processing', '⏳ Processing…');
+        setTimeout(() => bufFill.style.width = '0%', 400);
+      }
+    }
+
+    if (isRecording) {
+      mediaRecorder.start();
+      setTimeout(() => mediaRecorder.stop(), CHUNK_MS);
+    }
+  };
+
+  mediaRecorder.start();
+  setTimeout(() => mediaRecorder.stop(), CHUNK_MS);
+
+  isRecording = true;
+  micBtn.classList.add('recording');
+  micBtn.textContent = '⏹';
+  setStatus('recording', '🔴 Listening…');
+}
+
+function stopRecording() {
+  isRecording = false;
+
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+
+  if (mediaRecorder?.stream) {
+    mediaRecorder.stream.getTracks().forEach(t => t.stop());
+  }
+
+  if (audioCtx) {
+    audioCtx.close();
+    audioCtx = null;
+  }
+
+  micBtn.classList.remove('recording');
+  micBtn.textContent = '🎤';
+  bufFill.style.width = '0%';
+  cancelAnimationFrame(animFrame);
+  idleAnim.style.display = 'flex';
+  clearCanvas();
+  setStatus('connected', 'Stopped — click mic to speak again');
+}
+
+// ── Waveform ──────────────────────────────────────────────────────────────────
+const ctx2d = waveCanvas.getContext('2d');
+
+function resizeCanvas() {
+  waveCanvas.width  = waveCanvas.offsetWidth  * devicePixelRatio;
+  waveCanvas.height = waveCanvas.offsetHeight * devicePixelRatio;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function drawWave() {
+  animFrame = requestAnimationFrame(drawWave);
+  const buf = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteTimeDomainData(buf);
+
+  const W = waveCanvas.width, H = waveCanvas.height;
+  ctx2d.clearRect(0, 0, W, H);
+  ctx2d.lineWidth   = 2 * devicePixelRatio;
+  ctx2d.strokeStyle = '#7c6ef7';
+  ctx2d.beginPath();
+
+  const step = W / buf.length;
+  let x = 0;
+  for (let i = 0; i < buf.length; i++) {
+    const y = (buf[i] / 128) * (H / 2);
+    i === 0 ? ctx2d.moveTo(x, y) : ctx2d.lineTo(x, y);
+    x += step;
+  }
+  ctx2d.stroke();
+}
+
+function clearCanvas() {
+  ctx2d.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
+}
+
+// ── Cleanup on page unload ────────────────────────────────────────────────────
+window.addEventListener('beforeunload', () => {
+  socket?.close();
+  audioCtx?.close();
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+(async () => {
+  await loadConfig();
+  connect();
+})();
+</script>
+</body>
+</html>
